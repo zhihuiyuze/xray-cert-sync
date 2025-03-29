@@ -1,0 +1,10 @@
+{
+    "server_url": "https://<SERVER_IP_OR_DOMAIN>:<PORT>",
+    "output_cert": "/path/to/xray/fullchain.cer",
+    "output_key": "/path/to/xray/private.key",
+    "client_cert": "/path/to/xray/client.crt",
+    "client_key": "/path/to/xray/client.key",
+    "ca_cert": "/path/to/xray/ca.crt",
+    "reload_command": "systemctl restart xray"
+  }
+  

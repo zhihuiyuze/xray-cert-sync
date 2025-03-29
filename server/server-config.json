@@ -1,0 +1,9 @@
+{
+    "xray_cert": "/path/to/acme.sh/<your_domain>_ecc/fullchain.cer",
+    "xray_key": "/path/to/acme.sh/<your_domain>_ecc/<your_domain>.key",
+    "tls_cert": "/path/to/server.crt",
+    "tls_key": "/path/to/server.key",
+    "ca_cert": "/path/to/ca.crt",
+    "renew_command": "~/.acme.sh/acme.sh --renew -d <your_domain> --ecc --force"
+  }
+  
