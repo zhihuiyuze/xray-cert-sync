@@ -10,9 +10,10 @@
 #include <json-c/json.h>
 #include <signal.h>
 #include <stdbool.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
-#define PORT 8449
-#define CHECK_INTERVAL_SECONDS 3600  // Check every 1 hour
+#define CHECK_INTERVAL_SECONDS 3600
 
 char CERT_FILE[512];
 char KEY_FILE[512];
@@ -20,6 +21,9 @@ char TLS_CERT_FILE[512];
 char TLS_KEY_FILE[512];
 char CLIENT_CERT_FILE[512];
 char RENEW_COMMAND[1024];
+char BIND_IPV4[128];
+char BIND_IPV6[128];
+int PORT;
 
 #define RENEW_THRESHOLD_DAYS 7
 
@@ -56,6 +60,9 @@ void load_config() {
   strcpy(TLS_KEY_FILE, json_object_get_string(json_object_object_get(parsed, "tls_key")));
   strcpy(CLIENT_CERT_FILE, json_object_get_string(json_object_object_get(parsed, "ca_cert")));
   strcpy(RENEW_COMMAND, json_object_get_string(json_object_object_get(parsed, "renew_command")));
+  strcpy(BIND_IPV4, json_object_get_string(json_object_object_get(parsed, "bind_ipv4")));
+  strcpy(BIND_IPV6, json_object_get_string(json_object_object_get(parsed, "bind_ipv6")));
+  PORT = json_object_get_int(json_object_object_get(parsed, "port"));
   json_object_put(parsed);
 }
 
@@ -147,16 +154,45 @@ int main() {
   key_mem[key_len] = '\0';
   fclose(fkey);
 
-  struct MHD_Daemon *daemon;
-  daemon = MHD_start_daemon(MHD_USE_SSL | MHD_USE_SELECT_INTERNALLY,
-                            PORT, NULL, NULL,
-                            &answer_to_connection, NULL,
-                            MHD_OPTION_HTTPS_MEM_KEY, key_mem,
-                            MHD_OPTION_HTTPS_MEM_CERT, cert_mem,
-                            MHD_OPTION_HTTPS_MEM_TRUST, CLIENT_CERT_FILE,
-                            MHD_OPTION_END);
-  if (NULL == daemon) {
-    perror("MHD_start_daemon failed");
+  struct MHD_Daemon *daemon = NULL;
+
+  if (strlen(BIND_IPV4) > 0) {
+    struct sockaddr_in addr4;
+    memset(&addr4, 0, sizeof(addr4));
+    addr4.sin_family = AF_INET;
+    addr4.sin_port = htons(PORT);
+    if (inet_pton(AF_INET, BIND_IPV4, &addr4.sin_addr) == 1) {
+      daemon = MHD_start_daemon(MHD_USE_SSL | MHD_USE_SELECT_INTERNALLY,
+                                PORT, NULL, NULL,
+                                &answer_to_connection, NULL,
+                                MHD_OPTION_HTTPS_MEM_KEY, key_mem,
+                                MHD_OPTION_HTTPS_MEM_CERT, cert_mem,
+                                MHD_OPTION_HTTPS_MEM_TRUST, CLIENT_CERT_FILE,
+                                MHD_OPTION_SOCK_ADDR, &addr4,
+                                MHD_OPTION_END);
+    }
+  }
+
+  if (strlen(BIND_IPV6) > 0) {
+    struct sockaddr_in6 addr6;
+    memset(&addr6, 0, sizeof(addr6));
+    addr6.sin6_family = AF_INET6;
+    addr6.sin6_port = htons(PORT);
+    if (inet_pton(AF_INET6, BIND_IPV6, &addr6.sin6_addr) == 1) {
+      struct MHD_Daemon *daemon6 = MHD_start_daemon(MHD_USE_SSL | MHD_USE_SELECT_INTERNALLY | MHD_USE_DUAL_STACK,
+                                PORT, NULL, NULL,
+                                &answer_to_connection, NULL,
+                                MHD_OPTION_HTTPS_MEM_KEY, key_mem,
+                                MHD_OPTION_HTTPS_MEM_CERT, cert_mem,
+                                MHD_OPTION_HTTPS_MEM_TRUST, CLIENT_CERT_FILE,
+                                MHD_OPTION_SOCK_ADDR, &addr6,
+                                MHD_OPTION_END);
+      if (daemon == NULL) daemon = daemon6;
+    }
+  }
+
+  if (daemon == NULL) {
+    fprintf(stderr, "Failed to bind to any IP address.\n");
     return 1;
   }
 
